@@ -1,44 +1,22 @@
-name: Automation Test Pipeline
+name: Playwright Automation Test Pipeline
 
 on:
-
-  # Trigger on push
   push:
     branches:
       - main
       - develop
       - "feature/**"
 
-
-
-
-
-
-
-  # Trigger on Pull Request
   pull_request:
     branches:
       - main
       - develop
 
-
-
-
-
-
-
-  # Scheduled execution
   schedule:
-    - cron: "30 3 * * 1-5"   # Monday-Friday at 9:00 AM IST
+    - cron: "30 3 * * 1-5"
 
-
-
-
-
-  # Manual execution
   workflow_dispatch:
     inputs:
-
       environment:
         description: "Select Environment"
         required: true
@@ -50,8 +28,6 @@ on:
           - staging
           - production
 
-
-
       test_type:
         description: "Select Test Type"
         required: true
@@ -61,9 +37,7 @@ on:
           - smoke
           - sanity
           - regression
-
-
-
+          - all
 
       browser:
         description: "Select Browser"
@@ -74,8 +48,6 @@ on:
           - chromium
           - firefox
           - webkit
-
-
 
       test_suite:
         description: "Select Test Suite"
@@ -88,34 +60,32 @@ on:
           - booking
           - checkout
 
-
-
       headless:
         description: "Run Browser in Headless Mode?"
         required: true
         default: true
         type: boolean
 
-
-
-
 jobs:
-
   test:
-    name: Run Automation Tests
+    name: Run Playwright Tests
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          distribution: temurin
-          java-version: "17"
-          cache: maven
+          node-version: "20"
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
 
       - name: Display Test Configuration
         run: |
@@ -125,43 +95,42 @@ jobs:
           echo "Test Suite: ${{ inputs.test_suite || 'all' }}"
           echo "Headless: ${{ inputs.headless || 'true' }}"
 
-      - name: Install Dependencies
+      - name: Run Playwright Tests
         run: |
-          mvn clean install -DskipTests
+          npx playwright test \
+            --project="${{ inputs.browser || 'chromium' }}"
 
-      - name: Run Automation Tests
-        run: |
-          mvn test \
-            -Denv="${{ inputs.environment || 'qa' }}" \
-            -DtestType="${{ inputs.test_type || 'regression' }}" \
-            -Dbrowser="${{ inputs.browser || 'chromium' }}" \
-            -Dsuite="${{ inputs.test_suite || 'all' }}" \
-            -Dheadless="${{ inputs.headless || 'true' }}"
+      - name: Upload Playwright Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
 
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: |
-            target/surefire-reports/
-            test-results/
+          path: test-results/
           if-no-files-found: ignore
 
-      - name: Upload Screenshots
+      - name: Upload Screenshots and Videos
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots
+          name: screenshots-videos
           path: |
+            test-results/
             screenshots/
-            test-results/screenshots/
+            videos/
           if-no-files-found: ignore
 
       - name: Test Summary
         if: always()
         run: |
-          echo "## Automation Test Execution" >> $GITHUB_STEP_SUMMARY
+          echo "## Playwright Test Execution" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Configuration | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
