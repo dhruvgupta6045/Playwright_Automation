@@ -1,0 +1,172 @@
+name: Automation Test Pipeline
+
+on:
+
+  # Trigger on push
+  push:
+    branches:
+      - main
+      - develop
+      - "feature/**"
+
+
+
+
+
+
+
+  # Trigger on Pull Request
+  pull_request:
+    branches:
+      - main
+      - develop
+
+
+
+
+
+
+
+  # Scheduled execution
+  schedule:
+    - cron: "30 3 * * 1-5"   # Monday-Friday at 9:00 AM IST
+
+
+
+
+
+  # Manual execution
+  workflow_dispatch:
+    inputs:
+
+      environment:
+        description: "Select Environment"
+        required: true
+        default: "qa"
+        type: choice
+        options:
+          - dev
+          - qa
+          - staging
+          - production
+
+
+
+      test_type:
+        description: "Select Test Type"
+        required: true
+        default: "regression"
+        type: choice
+        options:
+          - smoke
+          - sanity
+          - regression
+
+
+
+
+      browser:
+        description: "Select Browser"
+        required: true
+        default: "chromium"
+        type: choice
+        options:
+          - chromium
+          - firefox
+          - webkit
+
+
+
+      test_suite:
+        description: "Select Test Suite"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - login
+          - booking
+          - checkout
+
+
+
+      headless:
+        description: "Run Browser in Headless Mode?"
+        required: true
+        default: true
+        type: boolean
+
+
+
+
+jobs:
+
+  test:
+    name: Run Automation Tests
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Display Test Configuration
+        run: |
+          echo "Environment: ${{ inputs.environment || 'qa' }}"
+          echo "Test Type: ${{ inputs.test_type || 'regression' }}"
+          echo "Browser: ${{ inputs.browser || 'chromium' }}"
+          echo "Test Suite: ${{ inputs.test_suite || 'all' }}"
+          echo "Headless: ${{ inputs.headless || 'true' }}"
+
+      - name: Install Dependencies
+        run: |
+          mvn clean install -DskipTests
+
+      - name: Run Automation Tests
+        run: |
+          mvn test \
+            -Denv="${{ inputs.environment || 'qa' }}" \
+            -DtestType="${{ inputs.test_type || 'regression' }}" \
+            -Dbrowser="${{ inputs.browser || 'chromium' }}" \
+            -Dsuite="${{ inputs.test_suite || 'all' }}" \
+            -Dheadless="${{ inputs.headless || 'true' }}"
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            target/surefire-reports/
+            test-results/
+          if-no-files-found: ignore
+
+      - name: Upload Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: |
+            screenshots/
+            test-results/screenshots/
+          if-no-files-found: ignore
+
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "## Automation Test Execution" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Configuration | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | ${{ inputs.environment || 'qa' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Type | ${{ inputs.test_type || 'regression' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Browser | ${{ inputs.browser || 'chromium' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | ${{ inputs.test_suite || 'all' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Headless | ${{ inputs.headless || 'true' }} |" >> $GITHUB_STEP_SUMMARY
